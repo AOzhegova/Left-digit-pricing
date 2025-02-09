@@ -7,12 +7,12 @@ library(fixest)
 library(ggpattern)
 con = dbConnect(duckdb(), shutdown = TRUE)
 
-tab<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Project Folder/Data/Aggregate Data/june_data_week_store_sku.parquet')", sep="" )
-tab1<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Project Folder/Data/Aggregate Data/july_data_week_store_sku.parquet')", sep="" )
-tab2<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Project Folder/Data/Aggregate Data/aug_data_week_store_sku.parquet')", sep="" )
-tab3<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Project Folder/Data/Aggregate Data/sep_data_week_store_sku.parquet')", sep="" )
-tab4<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Project Folder/Data/Aggregate Data/oct_data_week_store_sku.parquet')", sep="" )
-tab5<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Project Folder/Data/Aggregate Data/nov_data_week_store_sku.parquet')", sep="" )
+tab<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/june_data_week_store_sku.parquet')", sep="" )
+tab1<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/july_data_week_store_sku.parquet')", sep="" )
+tab2<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/aug_data_week_store_sku.parquet')", sep="" )
+tab3<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/sep_data_week_store_sku.parquet')", sep="" )
+tab4<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/oct_data_week_store_sku.parquet')", sep="" )
+tab5<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/nov_data_week_store_sku.parquet')", sep="" )
 
 june<-tbl(con, tab)
 
@@ -51,7 +51,14 @@ gc()
 analysis_dat<-analysis_dat%>%filter(is.na(price)==F & is.infinite(price)==F & is.na(store_id)==F )
 gc()
 
-analysis_dat<-analysis_dat%>%mutate(kron_9=as.numeric(kron==9))
+analysis_dat<-analysis_dat%>%mutate(kron_9=as.numeric(kron==9), ore_9=as.numeric(ore>=.9))
+
+
+analysis_dat%>%group_by( owner)%>%summarize(kron=mean(kron_9), ore=mean(ore_9))%>%arrange(kron)
+analysis_dat%>%group_by( owner,kjedeid)%>%summarize(kron=mean(kron_9), ore=mean(ore_9))%>%arrange(kron)
+
+
+analysis_dat%>%group_by(kjedeid, week)%>%summarize(price=mean(price))%>%filter(kjedeid!="Obs")%>%ggplot(aes(x=week, y=price, color=as.factor(kjedeid)))+geom_line()+labs(x="Week", y="Average Price", color="Chain")
 
 
 analysis_dat%>%group_by(kjedeid, owner)%>%summarize(kron=mean(kron_9))%>%arrange(kron)%>%ungroup()%>%mutate(row=row_number(), owner_lab=case_when(
