@@ -14,17 +14,42 @@ tab3<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate D
 tab4<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/oct_data_week_store_sku.parquet')", sep="" )
 tab5<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/nov_data_week_store_sku.parquet')", sep="" )
 
+june_mode<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/june_modes_week_store_sku.parquet')", sep="" )
+july_mode<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/july_modes_week_store_sku.parquet')", sep="" )
+aug_mode<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/aug_modes_week_store_sku.parquet')", sep="" )
+sep_mode<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/sep_modes_week_store_sku.parquet')", sep="" )
+oct_mode<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/oct_modes_week_store_sku.parquet')", sep="" )
+nov_mode<-paste('read_parquet(',"'//Sen.valuta.nhh.no/project/Psonr/Data/Aggregate Data/nov_modes_week_store_sku.parquet')", sep="" )
+
 june<-tbl(con, tab)
 
-july<-tbl(con, tab1)
-august<-tbl(con, tab2)
-sept<-tbl(con, tab3)
-oct<-tbl(con, tab4)
-nov<-tbl(con, tab5)
+june1<-tbl(con, june_mode)%>%dplyr::select(week, sku_gtin, store_id, ppu)
+
+june<-left_join(june,june1, by=c("week", "sku_gtin", "store_id"))
+
+july <- tbl(con, tab)
+july1 <- tbl(con, july_mode) %>% dplyr::select(week, sku_gtin, store_id, ppu)
+july <- left_join(july, july1, by = c("week", "sku_gtin", "store_id"))
+
+august <- tbl(con, tab)
+august1 <- tbl(con, aug_mode) %>% dplyr::select(week, sku_gtin, store_id, ppu)
+august <- left_join(august, august1, by = c("week", "sku_gtin", "store_id"))
+
+september <- tbl(con, tab)
+september1 <- tbl(con, sep_mode) %>% dplyr::select(week, sku_gtin, store_id, ppu)
+september <- left_join(september, september1, by = c("week", "sku_gtin", "store_id"))
+
+october <- tbl(con, tab)
+october1 <- tbl(con, oct_mode) %>% dplyr::select(week, sku_gtin, store_id, ppu)
+october <- left_join(october, october1, by = c("week", "sku_gtin", "store_id"))
+
+november <- tbl(con, tab)
+november1 <- tbl(con, nov_mode) %>% dplyr::select(week, sku_gtin, store_id, ppu)
+november <- left_join(november, november1, by = c("week", "sku_gtin", "store_id"))
 
 all_data<-union_all(june,july)%>%union_all(august)
 
-all_data1<-union_all(sept, oct)%>%union_all(nov)
+all_data1<-union_all(september, october)%>%union_all(november)
 
 analysis_dat<-all_data%>%collect()
 analysis_dat1<-all_data1%>%collect()
@@ -37,7 +62,7 @@ analysis_dat<-analysis_dat%>%filter(digits==13|digits==8)
 analysis_dat<-analysis_dat%>%mutate(digits=NULL)
 
 gc()
-analysis_dat<-analysis_dat%>%mutate(price=round(price,2), kron=as.numeric(floor(price)%%10), ore=as.numeric(round(price-floor(price),2)))
+analysis_dat<-analysis_dat%>%mutate(ppu=round(ppu,2), kron=as.numeric(floor(ppu)%%10), ore=as.numeric(round(ppu-floor(ppu),2)))
 
 gc()
 analysis_dat<-analysis_dat%>%mutate(owner=case_when(
@@ -48,7 +73,7 @@ analysis_dat<-analysis_dat%>%mutate(owner=case_when(
 
 gc()
 
-analysis_dat<-analysis_dat%>%filter(is.na(price)==F & is.infinite(price)==F & is.na(store_id)==F )
+analysis_dat<-analysis_dat%>%filter(is.na(ppu)==F & is.infinite(ppu)==F & is.na(store_id)==F )
 gc()
 
 analysis_dat<-analysis_dat%>%mutate(kron_9=as.numeric(kron==9), ore_9=as.numeric(ore>=.9))
