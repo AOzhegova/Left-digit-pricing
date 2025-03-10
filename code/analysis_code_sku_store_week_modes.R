@@ -27,23 +27,23 @@ june1<-tbl(con, june_mode)%>%dplyr::select(week, sku_gtin, store_id, ppu)
 
 june<-left_join(june,june1, by=c("week", "sku_gtin", "store_id"))
 
-july <- tbl(con, tab)
+july <- tbl(con, tab1)
 july1 <- tbl(con, july_mode) %>% dplyr::select(week, sku_gtin, store_id, ppu)
 july <- left_join(july, july1, by = c("week", "sku_gtin", "store_id"))
 
-august <- tbl(con, tab)
+august <- tbl(con, tab2)
 august1 <- tbl(con, aug_mode) %>% dplyr::select(week, sku_gtin, store_id, ppu)
 august <- left_join(august, august1, by = c("week", "sku_gtin", "store_id"))
 
-september <- tbl(con, tab)
+september <- tbl(con, tab3)
 september1 <- tbl(con, sep_mode) %>% dplyr::select(week, sku_gtin, store_id, ppu)
 september <- left_join(september, september1, by = c("week", "sku_gtin", "store_id"))
 
-october <- tbl(con, tab)
+october <- tbl(con, tab4)
 october1 <- tbl(con, oct_mode) %>% dplyr::select(week, sku_gtin, store_id, ppu)
 october <- left_join(october, october1, by = c("week", "sku_gtin", "store_id"))
 
-november <- tbl(con, tab)
+november <- tbl(con, tab5)
 november1 <- tbl(con, nov_mode) %>% dplyr::select(week, sku_gtin, store_id, ppu)
 november <- left_join(november, november1, by = c("week", "sku_gtin", "store_id"))
 
