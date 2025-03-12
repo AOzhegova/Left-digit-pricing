@@ -128,8 +128,8 @@ avgs<-avgs%>%mutate(format = case_when(
     TRUE ~ NA_character_  # Default case for unexpected values
   ))
 
-kron<-summary(feols(avg_kron~format, cluster="store_id", data=avgs), cluster="store_id")
-ore<-summary(feols(avg_ore~format, cluster="store_id", data=avgs), cluster="store_id")
+kron<-summary(feols(avg_kron~format|owner, cluster="store_id", data=avgs), cluster="store_id")
+ore<-summary(feols(avg_ore~format|owner, cluster="store_id", data=avgs), cluster="store_id")
 
 modelsummary(list("Kroner"=kron,"Ore"=ore), stars=T, gof_map = gm, coef_map = c(
   "(Intercept)" = "Convenience (intercept) ", 
