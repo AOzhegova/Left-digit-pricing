@@ -84,9 +84,19 @@ rema<-rema%>%mutate(week=as.numeric(strftime(date, "%U")))
 all_data <- ng%>%union_all(coop)%>%union_all( rema)
 
 all_data<-all_data%>%mutate(ppu=sales/quantity)
+all_data1<-all_data %>%
+       group_by(sku_gtin, kjedeid) %>%
+      summarize(n = n()) %>%
+       pivot_wider(names_from = kjedeid, values_from = n, values_fill = list(n = 0))
+all_data2<-all_data1%>%ungroup()%>%filter(if_all(-"sku_gtin", ~ . != 0))
 
+all_data_restrict<-all_data%>%semi_join(all_data2%>%dplyr::select("sku_gtin"), by="sku_gtin")
 
 avgs<-all_data%>%group_by(store_id,week, kjedeid)%>%summarize(avg_kron=mean(as.numeric(kron==9)), avg_ore=mean(as.numeric(ore>=.9)))%>%collect()
+
+avgs<-all_data_restrict%>%group_by(store_id,week, kjedeid)%>%summarize(avg_kron=mean(as.numeric(kron==9)), avg_ore=mean(as.numeric(ore>=.9)))
+avgs<-avgs%>%collect()
+
 avgs<-avgs%>%mutate(owner=case_when(
   kjedeid=="Rema"~"Rema", 
   kjedeid%in%c("kiwi", "meny", "spar", "n\u00e6rbutikken", "joker")~"NG",
