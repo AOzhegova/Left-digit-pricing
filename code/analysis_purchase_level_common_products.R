@@ -88,14 +88,15 @@ all_data1<-all_data %>%
        group_by(sku_gtin, kjedeid) %>%
       summarize(n = n()) %>%
        pivot_wider(names_from = kjedeid, values_from = n, values_fill = list(n = 0))
-all_data2<-all_data1%>%ungroup()%>%filter(if_all(-"sku_gtin", ~ . != 0))
+all_data1<-all_data1%>%ungroup()%>%filter(if_all(-"sku_gtin", ~ . != 0))%>%ungroup()%>%collect()
 
-all_data_restrict<-all_data%>%semi_join(all_data2%>%dplyr::select("sku_gtin"), by="sku_gtin")
+#all_data<-all_data%>%filter(sku_gtin%in%all_data1$sku_gtin)
+all_data<-all_data%>%mutate(sold_in_all=as.numeric(sku_gtin%in%all_data1$sku_gtin))
 
-avgs<-all_data%>%group_by(store_id,week, kjedeid)%>%summarize(avg_kron=mean(as.numeric(kron==9)), avg_ore=mean(as.numeric(ore>=.9)))%>%collect()
+avgs<-all_data%>%ungroup()%>%group_by(store_id,week, kjedeid)%>%summarize(avg_kron=mean(as.numeric(kron==9)), avg_ore=mean(as.numeric(ore>=.9)))%>%collect()
+avgs<-all_data%>%ungroup()%>%group_by(sku_gtin)%>%summarize(avg_kron=mean(as.numeric(kron==9)), avg_ore=mean(as.numeric(ore>=.9)))%>%collect()
 
-avgs<-all_data_restrict%>%group_by(store_id,week, kjedeid)%>%summarize(avg_kron=mean(as.numeric(kron==9)), avg_ore=mean(as.numeric(ore>=.9)))
-avgs<-avgs%>%collect()
+#avgs<-all_data_restrict%>%group_by(store_id,week, kjedeid)%>%summarize(avg_kron=mean(as.numeric(kron==9)), avg_ore=mean(as.numeric(ore>=.9)))%>%collect()
 
 avgs<-avgs%>%mutate(owner=case_when(
   kjedeid=="Rema"~"Rema", 
@@ -107,8 +108,8 @@ gm <- tibble::tribble(
   ~raw,        ~clean,          ~fmt,
   "nobs",      "Observations",             0,
 )
-kron<-summary(feols(avg_kron~owner|week, cluster="store_id", data=avgs), cluster="store_id")
-ore<-summary(feols(avg_ore~owner|week, cluster="store_id", data=avgs), cluster="store_id")
+kron<-summary(feols(avg_kron~owner|0, cluster="store_id", data=avgs), cluster="store_id")
+ore<-summary(feols(avg_ore~owner|0, cluster="store_id", data=avgs), cluster="store_id")
 
 modelsummary(list("Kroner"=kron,"Ore"=ore), stars=T, coef_map =c("(Intercept)"="Coop (intercept)", "ownerNG"="Norgesgruppen", "ownerRema"="Rema") , gof_map = gm , output="markdown")
 
@@ -129,7 +130,7 @@ modelsummary(list("Kroner"=kron,"Ore"=ore), stars=T, gof_map = gm, coef_map = c(
   "kjedeidnærbutikken" = "Nærbutikken (n)", 
   "kjedeidspar" = "Spar (n)",
   "kjedeidRema" = "Rema"
-) )
+), output="markdown" )
 
 avgs<-avgs%>%mutate(format = case_when(
     kjedeid %in% c("kiwi", "Extra", "Rema", "Prix") ~ "discount",
@@ -139,8 +140,8 @@ avgs<-avgs%>%mutate(format = case_when(
     TRUE ~ NA_character_  # Default case for unexpected values
   ))
 
-kron<-summary(feols(avg_kron~format|owner, cluster="store_id", data=avgs), cluster="store_id")
-ore<-summary(feols(avg_ore~format|owner, cluster="store_id", data=avgs), cluster="store_id")
+kron<-summary(feols(avg_kron~format|0, cluster="store_id", data=avgs), cluster="store_id")
+ore<-summary(feols(avg_ore~format|0, cluster="store_id", data=avgs), cluster="store_id")
 
 modelsummary(list("Kroner"=kron,"Ore"=ore), stars=T, gof_map = gm, coef_map = c(
   "(Intercept)" = "Convenience (intercept) ", 
