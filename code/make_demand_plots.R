@@ -87,4 +87,3 @@ coef_se_df <- analysis_dat %>%
        unnest(tidy_out) %>%
        select(kjedeid, term, estimate, std.error)%>%ungroup()%>%mutate(floor=as.numeric(gsub("as\\.factor\\(floor\\)", "", term)),group=(floor%/%10)*10)
 
- 
