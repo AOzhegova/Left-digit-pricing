@@ -87,3 +87,7 @@ coef_se_df <- analysis_dat %>%
        unnest(tidy_out) %>%
        select(kjedeid, term, estimate, std.error)%>%ungroup()%>%mutate(floor=as.numeric(gsub("as\\.factor\\(floor\\)", "", term)),group=(floor%/%10)*10)
 
+
+coef_se_df<-coef_se_df%>%mutate(lag=lag(estimate,1), diff=estimate-lag, isnine=ifelse(floor%in%c(9,19,29,39,49,59,69,79,89,99), 1, 0), iszero=ifelse(floor%in%c(10,20,30,40,50,60,70,80,90,100), 1, 0))
+
+ggplot(data=coef_se_df, aes(x=floor, y=estimate,group=as.factor(kjedeid), color=as.factor(group)))+geom_point()+geom_smooth(method="lm")
