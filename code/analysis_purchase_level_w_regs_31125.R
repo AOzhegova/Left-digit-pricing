@@ -84,9 +84,11 @@ rema<-rema%>%mutate(week=as.numeric(strftime(date, "%U")))
 all_data <- ng%>%union_all(coop)%>%union_all( rema)
 
 all_data<-all_data%>%mutate(ppu=sales/quantity)
+#all_data<-all_data%>%group_by(store_id, week, kjedeid, sku_gtin, ppu)%>%distinct()
 
+avgs<-all_data%>%group_by(store_id,week, kjedeid, ppu)%>%summarize(n=n())%>%collect()
 
-avgs<-all_data%>%group_by(store_id,week, kjedeid)%>%summarize(avg_kron=mean(as.numeric(kron==9)), avg_ore=mean(as.numeric(ore>=.9)))%>%collect()
+#avgs<-all_data%>%group_by(store_id,week, kjedeid)%>%summarize(avg_kron=mean(as.numeric(kron==9)), avg_ore=mean(as.numeric(ore>=.9)))%>%collect()
 avgs<-avgs%>%mutate(owner=case_when(
   kjedeid=="Rema"~"Rema", 
   kjedeid%in%c("kiwi", "meny", "spar", "n\u00e6rbutikken", "joker")~"NG",
@@ -102,7 +104,7 @@ ore<-summary(feols(avg_ore~owner|week, cluster="store_id", data=avgs), cluster="
 
 modelsummary(list("Kroner"=kron,"Ore"=ore), stars=T, coef_map =c("(Intercept)"="Coop (intercept)", "ownerNG"="Norgesgruppen", "ownerRema"="Rema") , gof_map = gm , output="markdown")
 
-avgs<-avgs%>%ungroup()%>%mutate(kjedeid=relevel(as.factor(kjedeid), ref="Prix"))
+avgs<-avgs%>%ungroup()%>%mutate(kjedeid=relevel(as.factor(kjedeid), ref="Prix"), kron=as.numeric(floor(ppu)%%10), ore=as.numeric(round(ppu-floor(ppu),2)), avg_kron=as.numeric(kron==9), avg_ore=as.numeric(ore>=.9))
 kron<-summary(feols(avg_kron~kjedeid, cluster="store_id", data=avgs), cluster="store_id")
 ore<-summary(feols(avg_ore~kjedeid, cluster="store_id", data=avgs), cluster="store_id")
 
