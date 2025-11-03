@@ -97,11 +97,11 @@ stores['id_int'] = stores['id_clean'].astype(float).astype('int64')
 stores_subset = stores.loc[:,['id_int','kommune_id']].drop_duplicates()
 df.store_id = df.store_id.astype('int64')   
 
-del stores, stores_subset
-gc.collect()
-
 df = df.merge(stores_subset[['id_int', 'kommune_id']], left_on='store_id', right_on='id_int', how='left')
 df.loc[df.kommune_id.isna(), 'kommune_id'] = '0301'  # Assign a default value for missing kommune_id
+
+del stores, stores_subset
+gc.collect()
 
 # for each product calculate an average price per week in other stores of the same chain in other municipalities
 df['price_iv'] = df.groupby(['sku_gtin', 'week', 'kjedeid'], as_index=False)['ppu'].transform(lambda x: x.mean())
@@ -176,111 +176,129 @@ model_iv5.summary()
 del model_iv5
 gc.collect()
 
-#%% Make a plot for predicted demand
-price_grid = np.linspace(df["ppu"].min(), df["ppu"].max(), 100)
+#%% Predict demand
+price_grid = np.linspace(0, 100, 10000)
 pred_df = pd.DataFrame({
     "price_nok": price_grid,
     "krone": price_grid.astype(int),
     "ore": ((price_grid - price_grid.astype(int)) * 100).round().astype(int)
 })
 pred_df["log_price_hat"] = np.log(pred_df["price_nok"])
-pred_df["krone_ends_with_nine"] = (pred_df["krone"] % 10 == 9).astype(int)
-pred_df["log_price_krone_hat"] = np.log(pred_df["krone"].replace(0, np.nan)).fillna(0)
-pred_df["ore_ends_with_nine"] = (pred_df["ore"] % 10 == 9).astype(int)
-pred_df["log_price_ore_hat"] = np.log(pred_df["ore"].replace(0, np.nan)).fillna(0)
+pred_df.loc[:, 'krone_ends_with_nine'] = pred_df["price_nok"].apply(krone_ends_with_nine)
+pred_df.loc[:, 'ore_ends_with_nine'] = pred_df["price_nok"].apply(ore_ends_with_nine)
+pred_df["log_price_ore_hat"] = pred_df.log_price_hat * pred_df.ore_ends_with_nine
+pred_df["log_price_krone_hat"] = pred_df.log_price_hat * pred_df.krone_ends_with_nine
 
-pred_df["log_q_hat"] = model_iv5.predict(pred_df)
+#pred_df["log_q_hat"] = model_iv5.predict(pred_df)
+pred_df["log_q_hat"] = pred_df['log_price_hat'] * model_iv5.coef()['log_price_hat'] + pred_df['krone_ends_with_nine'] * model_iv5.coef()['krone_ends_with_nine'] + pred_df['log_price_krone_hat'] * model_iv5.coef()['log_price_krone_hat'] + pred_df['ore_ends_with_nine'] * model_iv5.coef()['ore_ends_with_nine'] + pred_df['log_price_ore_hat'] * model_iv5.coef()['log_price_ore_hat']
 
-# Step 5: Plot
+# pred_df["log_q_hat"] = pred_df['log_price_hat'] * model_iv5.coef()['log_price_hat'] + pred_df['krone_ends_with_nine'] * model_iv5.coef()['krone_ends_with_nine'] + pred_df['ore_ends_with_nine'] * model_iv5.coef()['ore_ends_with_nine'] + pred_df['log_price_ore_hat'] * model_iv5.coef()['log_price_ore_hat']
+
+#%% Plot
+pred_df = pred_df[(pred_df["price_nok"] > 38) & (pred_df["price_nok"] < 42)]
+#pred_df = pred_df[(pred_df["price_nok"] > 8)]
+
 plt.figure(figsize=(8, 5))
 plt.plot(pred_df["price_nok"], pred_df["log_q_hat"], label="Predicted log quantity", color="navy")
+# Add vertical lines at prices ending in .9 (e.g., 8.9, 9.9, ..., 98.9)
+# price_ends_with_point9 = np.arange(19.0, 109, 10.0)
+# for price in price_ends_with_point9:
+#     plt.axvline(x=price, color='gray', linestyle='--')
+
+# Add a single label for the legend
+#plt.axvline(x=8.9, color='gray', linestyle='--', label='Krone part ends with 9')
 plt.xlabel("Price (NOK)")
 plt.ylabel("Predicted log Quantity")
 plt.title("Demand Curve (IV Prediction)")
-plt.grid(True)
+#plt.grid(True)
 plt.tight_layout()
+plt.legend(loc='upper right')
 plt.show()
 
-#%% MODELS for log quantity
-model_q = pf.feols('log_quantity ~ log_price + sw(krone_ends_with_nine, ore_ends_with_nine) | sku_gtin + store_id + week', data=df, vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
+#%% MODELS for different chains
+# Step 1: Run regression per chain
+results = []
 
-model_q = pf.feols('log_quantity ~ log_price + sw(krone_ends_with_nine, ore_ends_with_nine) | sku_gtin + store_id + week', data=df[df.format=='discounter'], vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
+for chain in df.kjedeid.unique():
+    df_chain = df[df.kjedeid == chain]
+    
+    model = pf.feols(
+        'log_quantity ~ log_price_hat + krone_ends_with_nine + log_price_krone_hat + ore_ends_with_nine + log_price_ore_hat | sku_gtin + store_id + week',
+        data=df_chain,
+        vcov={'CRV1': 'store_id'}
+    )
+    
+    coef_df = model.coef().reset_index()
+    coef_df['Std. Error'] = model.se().values
+    coef_df['kjedeid'] = chain
+    results.append(coef_df)
 
-model_q = pf.feols('log_quantity ~ log_price + sw(krone_ends_with_nine, ore_ends_with_nine) | sku_gtin + store_id + week', data=df[df.format=='convenience'], vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
+# Step 2: Combine all results
+all_results = pd.concat(results, ignore_index=True)
 
-model_q = pf.feols('log_quantity ~ log_price + sw(krone_ends_with_nine, ore_ends_with_nine) | sku_gtin + store_id + week', data=df[df.format=='supermarket'], vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
+# Step 3: Format with stars and SE on a new line
+def add_stars(estimate, se):
+    t = abs(estimate / se)
+    if t >= 2.576:
+        return '***'
+    elif t >= 1.96:
+        return '**'
+    elif t >= 1.645:
+        return '*'
+    else:
+        return ''
 
-#%% MODELS for log quantity and interaction
-model_q = pf.feols('log_quantity ~ log_price + log_price_krone + krone_ends_with_nine | sku_gtin + store_id + week', data=df, vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
+def format_entry(estimate, se):
+    stars = add_stars(estimate, se)
+    return f"{estimate:.3f}{stars}\n({se:.3f})"
 
-model_q = pf.feols('log_quantity ~ log_price + ore_ends_with_nine+ log_price_ore | sku_gtin + store_id + week', data=df, vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
+all_results['formatted'] = all_results.apply(
+    lambda row: format_entry(row['Estimate'], row['Std. Error']),
+    axis=1
+)
 
+# Step 4: Clean coefficient names
+all_results['Coefficient'] = all_results['Coefficient'].str.replace('_', ' ')
 
-model_q = pf.feols('log_quantity ~ log_price + krone_ends_with_nine + log_price_krone | sku_gtin + store_id + week', data=df[df.format=='discounter'], vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
+# Step 5: Define chain groups
 
-model_q = pf.feols('log_quantity ~ log_price + ore_ends_with_nine+ log_price_ore | sku_gtin + store_id + week', data=df[df.format=='discounter'], vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
+# Step 4: Define chain groups
+discounters = ['Extra', 'Prix', 'kiwi', 'Rema']
+supermarkets = ['Mega', 'spar', 'meny', 'Obs']
+convenience = ['joker','Marked','Matkroken','nærbutikken']
+chain_groups = {
+    'Discounters': discounters,
+    'Supermarkets': supermarkets,
+    'Convenience Stores': convenience
+}
 
-model_q = pf.feols('log_quantity ~ log_price + krone_ends_with_nine + log_price_krone | sku_gtin + store_id + week', data=df[df.format=='convenience'], vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
+# Step 6: Generate LaTeX tables by group
+for group_name, chains in chain_groups.items():
+    subset = all_results[all_results['kjedeid'].isin(chains)]
+    latex_df = subset.pivot(index='Coefficient', columns='kjedeid', values='formatted').reset_index()
+    latex_df = latex_df.rename(columns={'index': 'Coefficient'})
 
-model_q = pf.feols('log_quantity ~ log_price + ore_ends_with_nine+ log_price_ore | sku_gtin + store_id + week', data=df[df.format=='convenience'], vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
+    # Order columns by list
+    ordered_cols = ['Coefficient'] + [c for c in chains if c in latex_df.columns]
+    latex_df = latex_df[ordered_cols]
 
-model_q = pf.feols('log_quantity ~ log_price + krone_ends_with_nine + log_price_krone | sku_gtin + store_id + week', data=df[df.format=='supermarket'], vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
+    # Create LaTeX
+    latex_code = latex_df.to_latex(
+        index=False,
+        escape=False,
+        column_format="l" + "c" * (latex_df.shape[1] - 1),
+        caption=f"IV Estimates of Log Quantity on Price and 9-Endings – {group_name}",
+        label=f"tab:iv_{group_name.lower().replace(' ', '_')}"
+    )
 
-model_q = pf.feols('log_quantity ~ log_price + ore_ends_with_nine+ log_price_ore | sku_gtin + store_id + week', data=df[df.format=='supermarket'], vcov = {'CRV1':'store_id'})
-model_q.summary()
-del model_q
-gc.collect()
-
-#%% MODELS for log transactions
-model_trans = pf.feols('log_trans ~ log_price + sw(krone_ends_with_nine, ore_ends_with_nine) | sku_gtin + store_id + week', data=df, vcov = {'CRV1':'store_id'})
-model_trans.summary()
-del model_trans
-gc.collect()
-
-model_trans = pf.feols('log_trans ~ log_price + sw(krone_ends_with_nine, ore_ends_with_nine) | sku_gtin + store_id + week', data=df[df.format=='discounter'], vcov = {'CRV1':'store_id'})
-model_trans.summary()
-del model_trans
-gc.collect()
-
-model_trans = pf.feols('log_trans ~ log_price + sw(krone_ends_with_nine, ore_ends_with_nine) | sku_gtin + store_id + week', data=df[df.format=='convenience'], vcov = {'CRV1':'store_id'})
-model_trans.summary()
-del model_trans
-gc.collect()
-
-model_trans = pf.feols('log_trans ~ log_price + sw(krone_ends_with_nine, ore_ends_with_nine) | sku_gtin + store_id + week', data=df[df.format=='supermarket'], vcov = {'CRV1':'store_id'})
-model_trans.summary()
-del model_trans
-gc.collect()
+    # Print full table
+    print(f"\\begin{{table}}")
+    print(f"\\caption{{IV Estimates of Log Quantity on Price and 9-Endings – {group_name}}}")
+    print(f"\\label{{tab:iv_{group_name.lower().replace(' ', '_')}}}")
+    print(latex_code.replace("\\toprule", "\\toprule")
+                    .replace("\\midrule", "\\midrule")
+                    .replace("\\bottomrule", "\\bottomrule")
+                    .replace("\\begin{tabular}", "\\begin{tabular}")
+                    .replace("\\end{tabular}", "\\end{tabular}"))
+    print("\\end{table}\n")
+# %%
