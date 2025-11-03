@@ -63,27 +63,37 @@ analysis_dat<-analysis_dat%>%mutate(digits=NULL)
 analysis_dat<-analysis_dat%>%filter(is.infinite(ppu)==F)
 gc()
 analysis_dat<-analysis_dat%>%mutate(ppu=round(ppu,3),floor=floor(ppu),  group=(floor%/%10)*10)
+categories<-read_csv("//Sen.valuta.nhh.no/project/Psonr/Data/sku_kassalcat_top95.csv")
+analysis_dat<-left_join(analysis_dat, categories, by=c("sku_gtin"="sku"))
 
-analysis_dat<-analysis_dat%>%filter(floor<=100)%>%mutate(rand=runif(n=nrow(.)))%>%filter(rand<.1)
+analysis_dat<-analysis_dat%>%filter(floor<=100 & is.na(kassalcat)==F)#%>%mutate(rand=runif(n=nrow(.)))#%>%filter(rand<.5)
 
-output<-feols(log(quantity+1)~as.factor(floor)|week+store_id+sku_gtin, data=analysis_dat, se="hetero")
+#analysis_dat<-analysis_dat%>%filter(floor<=100)%>%mutate(rand=runif(n=nrow(.)))%>%filter(rand<.1)
+
+
+
+output<-feols(log(quantity+1)~as.factor(floor)|week+store_id+sku_gtin+kassalcat, data=analysis_dat, se="iid")
 
 
 plot<-tidy(output)
 plot<-plot%>%mutate(floor=seq(1,100,1), group=(floor%/%10)*10)
 ggplot(data=plot, aes(x=floor, y=estimate, color=as.factor(group)))+geom_point()+geom_smooth(method="lm")
 
+analysis_dat<-analysis_dat%>%mutate(kron=as.numeric(as.numeric(floor(ppu)%%10)==9), ore=as.numeric(as.numeric(round(ppu-floor,2))>=.9))
+analysis_dat<-analysis_dat%>%group_by(kassalcat )%>%nest()
 
-analysis_dat<-analysis_dat%>%group_by(kjedeid)%>%nest()
-
-analysis_dat<-analysis_dat%>%mutate(regs=map(data, ~feols(log(quantity+1)~as.factor(floor)|week+store_id+sku_gtin, data=.x, se="hetero")))
+analysis_dat<-analysis_dat%>%mutate(regs=map(data, ~feols(log(quantity+1)~log(ppu)+kron*ore+kjedeid|week+sku_gtin, data=.x, cluster="store_id")))
 
 
 coef_se_df <- analysis_dat %>%
      mutate(
              tidy_out = map(regs, ~tidy(.x))  # includes estimate and std.error
          ) %>%
-       select(kjedeid, tidy_out) %>%
+       select(  tidy_out) %>%
        unnest(tidy_out) %>%
-       select(kjedeid, term, estimate, std.error)%>%ungroup()%>%mutate(floor=as.numeric(gsub("as\\.factor\\(floor\\)", "", term)),group=(floor%/%10)*10)
+       select(  term, estimate, std.error)%>%ungroup()#%>%mutate(floor=as.numeric(gsub("as\\.factor\\(floor\\)", "", term)),group=(floor%/%10)*10)
 
+
+coef_se_df<-coef_se_df%>%mutate(lag=lag(estimate,1), diff=estimate-lag, isnine=ifelse(floor%in%c(9,19,29,39,49,59,69,79,89,99), 1, 0), iszero=ifelse(floor%in%c(10,20,30,40,50,60,70,80,90,100), 1, 0))
+
+ggplot(data=coef_se_df, aes(x=floor, y=estimate,group=as.factor(kjedeid), color=as.factor(group)))+geom_point()+geom_smooth(method="lm")
