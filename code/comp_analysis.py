@@ -31,8 +31,8 @@ con = duckdb.connect()
 
 # Define file paths
 base_path = datafolder / "Aggregate Data"
-months = ["june"]
-#months = ["june", "july", "aug", "sep", "oct", "nov"]
+#months = ["june"]
+months = ["june", "july", "aug", "sep", "oct", "nov"]
 
 # Read the first month's data to determine column structure
 sample_query = f"SELECT * FROM read_parquet('{base_path / (months[0] + '_data_week_store_sku.parquet')}') LIMIT 1"
@@ -237,7 +237,7 @@ print("Correlation between krone_ends_with_nine and revenue: {:.3f}".format(stor
 def min_distance_to_other_category(gdf, column):
     min_distances = []
     for idx, row in gdf.iterrows():
-        other_stores = gdf[gdf[column] != row[column])]
+        other_stores = gdf[gdf[column] != row[column]]
         distances = other_stores.distance(row['geometry'])
         min_distances.append(distances.min())
     return min_distances
@@ -278,23 +278,22 @@ df = count_competitors_within_distance(df, distances_km=[2, 5, 10])
 
 
 #%% Run regressions for ore_ends_with_nine and krone_ends_with_nine
-rema_df = comp_df[comp_df.kjedeid=='Rema']
-m_2km_ore = smf.ols('ore_ends_with_nine ~ local_monopoly_2km', data=rema_df).fit()
+m_2km_ore = smf.ols('ore_ends_with_nine ~ local_monopoly_2km + C(kjedeid)', data=df).fit()
 print(m_2km_ore.summary())
 
-m_5km_ore = smf.ols('ore_ends_with_nine ~ local_monopoly_5km + C(kjedeid)', data=rema_df).fit()
+m_5km_ore = smf.ols('ore_ends_with_nine ~ local_monopoly_5km + C(kjedeid)', data=df).fit()
 print(m_5km_ore.summary())
 
-m_10km_ore = smf.ols('ore_ends_with_nine ~ local_monopoly_10km + C(kjedeid)', data=rema_df).fit()
+m_10km_ore = smf.ols('ore_ends_with_nine ~ local_monopoly_10km + C(kjedeid)', data=df).fit()
 print(m_10km_ore.summary())
 
-m_2km_krone = smf.ols('krone_ends_with_nine ~ local_monopoly_2km + C(kjedeid)', data=rema_df).fit()
+m_2km_krone = smf.ols('krone_ends_with_nine ~ local_monopoly_2km + C(kjedeid)', data=df).fit()
 print(m_2km_krone.summary())
 
-m_5km_krone = smf.ols('krone_ends_with_nine ~ local_monopoly_5km + C(kjedeid)', data=rema_df).fit()
+m_5km_krone = smf.ols('krone_ends_with_nine ~ local_monopoly_5km + C(kjedeid)', data=df).fit()
 print(m_5km_krone.summary())
 
-m_10km_krone = smf.ols('krone_ends_with_nine ~ local_monopoly_10km + C(kjedeid)', data=rema_df).fit()
+m_10km_krone = smf.ols('krone_ends_with_nine ~ local_monopoly_10km + C(kjedeid)', data=df).fit()
 print(m_10km_krone.summary())
 
 # summarize all models (statsmodels OLS results)
@@ -318,4 +317,8 @@ result_df = results_table.tables[0] if hasattr(results_table.tables[0], "columns
 md = tabulate(result_df, headers="keys", tablefmt="github", showindex=True)
 print(md)
 
-# %%
+# %% Explore discounts
+modes = df_subset.groupby(['gtin','date','kjede'])['ppu'] \
+    .agg(lambda x: x.value_counts().idxmax()).reset_index(name='black_price')
+df_subset = df_subset.merge(modes, on=['gtin','date','kjede'], how='left')
+df_subset['is_discount'] = df_subset['ppu'] < df_subset['black_price']
