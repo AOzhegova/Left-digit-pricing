@@ -284,3 +284,4 @@ print(mod2.summary())
 
 mod3 = pf.feols("ppu_ldp ~ price_at_min_lag + price_lower_lag  + price_at_min_lag*min_price_lag_int + price_lower_lag*min_price_lag_int + price_at_min_lag*min_price_lag_ldp + price_lower_lag*min_price_lag_ldp | sku_gtin + week", data=df_chain_prd_week)
 print(mod3.summary())
+

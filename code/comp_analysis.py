@@ -321,4 +321,4 @@ print(md)
 modes = df_subset.groupby(['gtin','date','kjede'])['ppu'] \
     .agg(lambda x: x.value_counts().idxmax()).reset_index(name='black_price')
 df_subset = df_subset.merge(modes, on=['gtin','date','kjede'], how='left')
-df_subset['is_discount'] = df_subset['ppu'] < df_subset['black_price']
+df_subset['is_discount'] = df_subset['price'] < df_subset['black_price']
