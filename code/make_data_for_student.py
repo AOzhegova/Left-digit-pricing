@@ -116,6 +116,8 @@ df_store = df_subset.groupby('store_id', as_index=False).agg({
 #df_store.to_parquet("M:/df_store.parquet", index=False)
 
 #%%
+df_store = pd.read_parquet("M:/df_store.parquet")
+
 #%% # Load geodata, keys: store id
 stores = gpd.read_file(r'M:\grocery_server\data\geodata\NARING_Dagligvare.gdb')
 stores['id_clean'] = stores['id'].apply(lambda x: re.sub(r'[^0-9]', '', str(x)))
@@ -128,3 +130,7 @@ df_store = df_store.merge(geodata_df, left_on='store_id', right_on='id_int', how
 # Check how many stores did not match in Geodata
 print('Number of stores without Geodata:', df_store.kjedeid.isna().sum())
 print('Number of stores with Geodata:', df_store.kjedeid.notna().sum())
+
+#%%
+kassalapp = pd.read_feather("//sen/project/Psonr/Data/kassalapp_data_food.ftr")
+kassalapp.to_csv("//sen/project/Psonr/Data/kassalapp_data_food.csv")
