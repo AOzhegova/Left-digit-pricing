@@ -40,8 +40,8 @@ con = duckdb.connect()
 
 # Define file paths
 base_path = datafolder / "Aggregate Data"
-months = ["june", "july", "aug", "sep", "oct", "nov"]
-#months = ["june"]
+#months = ["june", "july", "aug", "sep", "oct", "nov"]
+months = ["june"]
 
 # Read the first month's data to determine column structure
 sample_query = f"SELECT * FROM read_parquet('{base_path / (months[0] + '_data_week_store_sku.parquet')}') LIMIT 1"
@@ -193,58 +193,6 @@ del model1
 gc.collect()
 
 # %%
-model2 = pf.feols('log_quantity ~ log_price + dK + dO | sku_gtin + store_id + week', data=df_nonunique, vcov = {'CRV1':'store_id'})
-model2.summary()
-
-# %% Create prediction data
-prices = np.round(np.arange(40.00, 50.00, 0.01), 2)
-
-dK = [krone_distance(p) for p in prices] # distance to lower decade (49.90 -> 9)
-dO = [ore_distance(p) for p in prices] # distance to 0 ore (49.90 -> 0.90)
-
-pred_df = pd.DataFrame({
-    "price": prices,
-    "log_price": np.log(prices),
-    "dK": dK,
-    "dO": dO
-})
-
-coef = model2.coef()
-
-pred_df["log_q_hat"] = (
-    coef["log_price"] * pred_df["log_price"]
-    + coef["dK"] * pred_df["dK"]
-    + coef["dO"] * pred_df["dO"]
-)
-pred_df["q_hat"] = np.exp(pred_df["log_q_hat"])
-
-#%% Plot predicted demand
-plt.figure()
-plt.plot(pred_df["price"], pred_df["log_q_hat"])
-plt.axvline(40, linestyle="--")
-plt.axvline(50, linestyle="--")
-plt.xlabel("Price (NOK)")
-plt.ylabel("Predicted log quantity")
-plt.title("Predicted demand with krone and øre distance effects")
-plt.show()
-
-
-# %%
-plt.figure()
-plt.plot(pred_df["price"], pred_df["q_hat"])
-plt.axvline(40, linestyle="--")
-plt.axvline(50, linestyle="--")
-plt.xlabel("Price (NOK)")
-plt.ylabel("Predicted quantity")
-plt.title("Predicted demand with krone and øre distance effects")
-plt.show()
-
-# %%
-model3 = pf.feols('log_quantity ~ log_krone_part + log_ore_part | sku_gtin + store_id + week', data=df_nonunique, vcov = {'CRV1':'store_id'})
-model3.summary()
-
-# %%
-
 model4 = pf.feols('log_quantity ~ ppu + krone_part + decade | sku_gtin + kjedeid + week', data=df_nonunique, vcov = {'CRV1':'store_id'})
 model4.summary()
 
